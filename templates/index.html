@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>链接卡片 | 链接导航生成器</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="page-wrapper">
+        <div class="container">
+            <header class="header">
+                <div class="logo">
+                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                        <rect width="36" height="36" rx="10" fill="url(#logo-gradient)"/>
+                        <path d="M12 18L16 14L20 18L24 14" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M12 22L16 18L20 22L24 18" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+                        <defs>
+                            <linearGradient id="logo-gradient" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#6366F1"/>
+                                <stop offset="1" stop-color="#8B5CF6"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <span class="logo-text">LinkCard</span>
+                </div>
+                <p class="subtitle">将文档链接转换为精美的导航卡片</p>
+            </header>
+
+            <main class="main">
+                <div class="form-card">
+                    <div class="form-group">
+                        <label for="url-input">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                            </svg>
+                            文档链接
+                        </label>
+                        <input type="text" id="url-input" placeholder="粘贴 KM、飞书、语雀等文档链接..." />
+                    </div>
+                    <div class="form-group">
+                        <label for="title-input">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 7V4h16v3"/>
+                                <path d="M9 20h6"/>
+                                <path d="M12 4v16"/>
+                            </svg>
+                            页面标题 <span class="optional">(可选)</span>
+                        </label>
+                        <input type="text" id="title-input" placeholder="自定义卡片标题" />
+                    </div>
+                    <div class="form-group">
+                        <label for="cookie-input">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/>
+                                <path d="M8.5 8.5v.01"/>
+                                <path d="M16 15.5v.01"/>
+                                <path d="M12 12v.01"/>
+                                <path d="M11 17v.01"/>
+                                <path d="M7 14v.01"/>
+                            </svg>
+                            Cookie <span class="optional">(可选，用于需要登录的文档)</span>
+                        </label>
+                        <input type="text" id="cookie-input" placeholder="粘贴浏览器中的 Cookie 值" />
+                    </div>
+                    <button id="parse-btn" class="btn primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                        生成卡片
+                    </button>
+                </div>
+
+                <div id="result" class="result-card" style="display: none;">
+                    <div class="result-header">
+                        <div class="result-icon success">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        </div>
+                        <div class="result-info">
+                            <span class="result-title">生成成功</span>
+                            <span class="result-count">共 <strong id="card-count">0</strong> 个链接</span>
+                        </div>
+                    </div>
+                    <div class="result-link">
+                        <span class="result-label">访问地址</span>
+                        <a id="view-link" href="#" target="_blank"></a>
+                    </div>
+                    <button id="copy-btn" class="btn secondary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        复制链接
+                    </button>
+                </div>
+
+                <div id="loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <span>正在解析文档...</span>
+                </div>
+
+                <div id="error" class="error-card" style="display: none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <span id="error-text"></span>
+                </div>
+            </main>
+
+            <footer class="footer">
+                <div class="platforms">
+                    <span class="platform-tag">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                        学城 KM
+                    </span>
+                    <span class="platform-tag">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                        飞书
+                    </span>
+                    <span class="platform-tag">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                        语雀
+                    </span>
+                    <span class="platform-tag">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                        其他网页
+                    </span>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        const urlInput = document.getElementById('url-input');
+        const titleInput = document.getElementById('title-input');
+        const cookieInput = document.getElementById('cookie-input');
+        const parseBtn = document.getElementById('parse-btn');
+        const resultCard = document.getElementById('result');
+        const viewLink = document.getElementById('view-link');
+        const cardCount = document.getElementById('card-count');
+        const copyBtn = document.getElementById('copy-btn');
+        const loading = document.getElementById('loading');
+        const errorCard = document.getElementById('error');
+        const errorText = document.getElementById('error-text');
+
+        parseBtn.addEventListener('click', async () => {
+            const url = urlInput.value.trim();
+            if (!url) {
+                showError('请输入文档链接');
+                return;
+            }
+
+            showLoading();
+            hideError();
+            resultCard.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/parse', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        url: url,
+                        title: titleInput.value.trim(),
+                        cookie: cookieInput.value.trim()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || '解析失败');
+                }
+
+                showResult(data);
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                hideLoading();
+            }
+        });
+
+        copyBtn.addEventListener('click', () => {
+            const link = viewLink.href;
+            navigator.clipboard.writeText(link).then(() => {
+                copyBtn.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    已复制
+                `;
+                setTimeout(() => {
+                    copyBtn.innerHTML = `
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        复制链接
+                    `;
+                }, 2000);
+            });
+        });
+
+        function showResult(data) {
+            viewLink.href = data.viewURL;
+            viewLink.textContent = data.viewURL;
+            cardCount.textContent = data.count;
+            resultCard.style.display = 'block';
+        }
+
+        function showLoading() {
+            loading.style.display = 'flex';
+            parseBtn.disabled = true;
+        }
+
+        function hideLoading() {
+            loading.style.display = 'none';
+            parseBtn.disabled = false;
+        }
+
+        function showError(msg) {
+            errorText.textContent = msg;
+            errorCard.style.display = 'flex';
+        }
+
+        function hideError() {
+            errorCard.style.display = 'none';
+        }
+
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                parseBtn.click();
+            }
+        });
+
+        titleInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                parseBtn.click();
+            }
+        });
+    </script>
+</body>
+</html>
