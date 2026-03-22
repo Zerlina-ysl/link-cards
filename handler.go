@@ -110,17 +110,6 @@ func GetCardData(id string) *CardData {
 	return cardStore[id]
 }
 
-// HandleGetCards 获取单个卡片数据（API）
-func HandleGetCards(c *gin.Context) {
-	id := c.Param("id")
-	data := GetCardData(id)
-	if data == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "页面不存在"})
-		return
-	}
-	c.JSON(http.StatusOK, data)
-}
-
 // HandleParseFromExtension 处理来自浏览器扩展的解析请求
 func HandleParseFromExtension(c *gin.Context) {
 	var req struct {
@@ -142,12 +131,18 @@ func HandleParseFromExtension(c *gin.Context) {
 
 	Log.Debugf("收到扩展数据: title=%s, links=%d, source=%s", req.Title, len(req.Links), req.SourceURL)
 
-	// 为每个链接添加 favicon
+	// 并行为每个链接添加 favicon
+	var wg sync.WaitGroup
 	for i := range req.Links {
 		if req.Links[i].URL != "" {
-			req.Links[i].Favicon = getFaviconURL(req.Links[i].URL)
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				req.Links[index].Favicon = getFaviconURL(req.Links[index].URL)
+			}(i)
 		}
 	}
+	wg.Wait()
 
 	// 生成唯一 ID
 	id := generateID()

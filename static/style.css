@@ -352,21 +352,43 @@ body {
 
 .cards-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-    gap: 24px;
+    gap: 16px;
     margin-bottom: 40px;
-    padding: 40px 20px;
+    padding: 24px 20px;
     max-width: 900px;
     margin-left: auto;
     margin-right: auto;
+    grid-auto-flow: row;  /* 确保按行顺序排列 */
+}
+
+/* 根据链接数量自适应图标大小 */
+/* 1-12个链接：大图标 */
+.cards-grid:has(> :nth-child(-n+12):last-child) {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+}
+
+/* 13-24个链接：中等图标 */
+.cards-grid:has(> :nth-child(n+13):nth-child(-n+24):last-child) {
+    grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+}
+
+/* 25-48个链接：小图标 */
+.cards-grid:has(> :nth-child(n+25):nth-child(-n+48):last-child) {
+    grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
+}
+
+/* 49+个链接：最小图标 */
+.cards-grid:has(> :nth-child(n+49)) {
+    grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
+    gap: 12px;
 }
 
 .link-card {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
-    padding: 8px;
+    gap: 8px;
+    padding: 6px;
     background: transparent;
     border: none;
     border-radius: 8px;
@@ -384,9 +406,10 @@ body {
     transform: scale(0.92);
 }
 
+/* 默认图标大小（1-12个链接） */
 .link-icon {
-    width: 96px;
-    height: 96px;
+    width: 72px;
+    height: 72px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -399,13 +422,47 @@ body {
 }
 
 .link-icon img {
-    width: 64px;
-    height: 64px;
+    width: 54px;
+    height: 54px;
     object-fit: contain;
     image-rendering: -webkit-optimize-contrast;
     image-rendering: crisp-edges;
 }
 
+/* 13-24个链接：中等图标 */
+.cards-grid:has(> :nth-child(n+13):nth-child(-n+24):last-child) .link-icon {
+    width: 64px;
+    height: 64px;
+}
+
+.cards-grid:has(> :nth-child(n+13):nth-child(-n+24):last-child) .link-icon img {
+    width: 48px;
+    height: 48px;
+}
+
+/* 25-48个链接：小图标 */
+.cards-grid:has(> :nth-child(n+25):nth-child(-n+48):last-child) .link-icon {
+    width: 56px;
+    height: 56px;
+}
+
+.cards-grid:has(> :nth-child(n+25):nth-child(-n+48):last-child) .link-icon img {
+    width: 42px;
+    height: 42px;
+}
+
+/* 49+个链接：最小图标 */
+.cards-grid:has(> :nth-child(n+49)) .link-icon {
+    width: 48px;
+    height: 48px;
+}
+
+.cards-grid:has(> :nth-child(n+49)) .link-icon img {
+    width: 36px;
+    height: 36px;
+}
+
+/* 默认标题大小（1-12个链接） */
 .link-title {
     font-size: 13px;
     font-weight: 400;
@@ -418,6 +475,21 @@ body {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     word-break: break-word;
+}
+
+/* 13-24个链接：中等标题 */
+.cards-grid:has(> :nth-child(n+13):nth-child(-n+24):last-child) .link-title {
+    font-size: 12px;
+}
+
+/* 25-48个链接：小标题 */
+.cards-grid:has(> :nth-child(n+25):nth-child(-n+48):last-child) .link-title {
+    font-size: 11px;
+}
+
+/* 49+个链接：最小标题 */
+.cards-grid:has(> :nth-child(n+49)) .link-title {
+    font-size: 10px;
 }
 
 .card-footer {
@@ -452,29 +524,43 @@ body {
         padding: 32px 16px;
     }
 
-    .cards-grid {
-        grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
-        gap: 20px;
-        padding: 24px 8px;
+    /* 移动端：重置所有自适应规则，使用统一的小尺寸 */
+    .cards-grid,
+    .cards-grid:has(> :nth-child(-n+12):last-child),
+    .cards-grid:has(> :nth-child(n+13):nth-child(-n+24):last-child),
+    .cards-grid:has(> :nth-child(n+25):nth-child(-n+48):last-child),
+    .cards-grid:has(> :nth-child(n+49)) {
+        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+        gap: 12px;
+        padding: 16px 8px;
     }
 
     .link-card {
-        padding: 6px;
-        gap: 10px;
+        padding: 4px;
+        gap: 6px;
     }
 
-    .link-icon {
-        width: 80px;
-        height: 80px;
+    .link-icon,
+    .cards-grid:has(> :nth-child(n+13):nth-child(-n+24):last-child) .link-icon,
+    .cards-grid:has(> :nth-child(n+25):nth-child(-n+48):last-child) .link-icon,
+    .cards-grid:has(> :nth-child(n+49)) .link-icon {
+        width: 52px;
+        height: 52px;
     }
 
-    .link-icon img {
-        width: 56px;
-        height: 56px;
+    .link-icon img,
+    .cards-grid:has(> :nth-child(n+13):nth-child(-n+24):last-child) .link-icon img,
+    .cards-grid:has(> :nth-child(n+25):nth-child(-n+48):last-child) .link-icon img,
+    .cards-grid:has(> :nth-child(n+49)) .link-icon img {
+        width: 38px;
+        height: 38px;
     }
 
-    .link-title {
-        font-size: 12px;
+    .link-title,
+    .cards-grid:has(> :nth-child(n+13):nth-child(-n+24):last-child) .link-title,
+    .cards-grid:has(> :nth-child(n+25):nth-child(-n+48):last-child) .link-title,
+    .cards-grid:has(> :nth-child(n+49)) .link-title {
+        font-size: 11px;
     }
 
     .platforms {

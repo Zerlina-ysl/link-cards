@@ -125,7 +125,14 @@ function extractLinkText(linkElement) {
 // 提取 <a> 标签链接
 function extractAnchorLinks(seen) {
   const links = [];
-  const anchors = document.querySelectorAll('a[href]');
+
+  // 尝试找到正文区域
+  const mainContent = findMainContent();
+
+  // 优先从正文区域提取链接，如果找不到正文则从整个页面提取
+  const anchors = mainContent ?
+    mainContent.querySelectorAll('a[href]') :
+    document.querySelectorAll('a[href]');
 
   anchors.forEach(link => {
     const url = link.href;
@@ -171,6 +178,51 @@ function extractAnchorLinks(seen) {
   });
 
   return links;
+}
+
+// 查找页面正文区域
+function findMainContent() {
+  // 尝试多种常见的正文容器选择器
+  const selectors = [
+    // 标准 HTML5 语义标签
+    'article',
+    'main',
+    '[role="main"]',
+
+    // 学城（美团内部）
+    '.doc-content',
+    '.km-doc-content',
+    '#doc-content',
+
+    // 飞书
+    '.doc-content',
+    '.lark-doc-content',
+
+    // 语雀
+    '.ne-viewer-body',
+    '.lake-content',
+
+    // Notion
+    '.notion-page-content',
+
+    // 通用
+    '.content',
+    '.main-content',
+    '.article-content',
+    '#content',
+    '#main-content'
+  ];
+
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (element) {
+      console.log('[Link Cards] 找到正文区域:', selector);
+      return element;
+    }
+  }
+
+  console.log('[Link Cards] 未找到正文区域，使用整个页面');
+  return null;
 }
 
 // 判断是否应该跳过该链接
@@ -431,27 +483,6 @@ function isValidUrl(url) {
   ];
 
   for (const pattern of invalidPatterns) {
-    if (pattern.test(url)) {
-      return false;
-    }
-  }
-
-  // 排除飞书/语雀/Notion 等文档平台的内部文档链接
-  const docPlatformPatterns = [
-    // 飞书文档
-    /feishu\.cn\/(docs|docx|sheets|base|wiki|minutes)/i,
-    /larksuite\.com\/(docs|docx|sheets|base|wiki|minutes)/i,
-    // 语雀文档
-    /yuque\.com\/.*\/.*\/.*/i,
-    // Notion 文档
-    /notion\.so\/.*-[a-f0-9]{32}/i,
-    /notion\.site\/.*/i,
-    // 其他常见文档平台
-    /docs\.google\.com/i,
-    /confluence\./i
-  ];
-
-  for (const pattern of docPlatformPatterns) {
     if (pattern.test(url)) {
       return false;
     }

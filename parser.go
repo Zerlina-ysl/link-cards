@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 )
 
 // ParsePage 解析页面内容，提取链接
@@ -65,15 +67,24 @@ func ParsePage(pageURL string, cookie string) ([]CardItem, string, error) {
 	// 提取标题
 	title := extractTitle(content)
 
-	// 统一使用 Markdown 解析（适用于飞书、语雀、学城等平台）
-	cards := parseMarkdownLinks(content)
+	// 尝试提取正文区域
+	mainContent := extractMainContent(content)
 
-	// 获取每个链接的 favicon (使用多个备用源)
+	// 统一使用 Markdown 解析（适用于飞书、语雀、学城等平台）
+	cards := parseMarkdownLinks(mainContent)
+
+	// 并行获取每个链接的 favicon
+	var wg sync.WaitGroup
 	for i := range cards {
 		if cards[i].URL != "" {
-			cards[i].Favicon = getFaviconURL(cards[i].URL)
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				cards[index].Favicon = getFaviconURL(cards[index].URL)
+			}(i)
 		}
 	}
+	wg.Wait()
 
 	return cards, title, nil
 }
@@ -95,6 +106,32 @@ func extractTitle(content string) string {
 	return ""
 }
 
+// extractMainContent 提取页面正文区域
+func extractMainContent(content string) string {
+	// 尝试多种常见的正文容器标签
+	patterns := []struct {
+		name  string
+		regex *regexp.Regexp
+	}{
+		{"<article>", regexp.MustCompile(`(?s)<article[^>]*>(.*?)</article>`)},
+		{"<main>", regexp.MustCompile(`(?s)<main[^>]*>(.*?)</main>`)},
+		{"role=main", regexp.MustCompile(`(?s)<[^>]*role="main"[^>]*>(.*?)</[^>]+>`)},
+		{".doc-content", regexp.MustCompile(`(?s)<[^>]*class="[^"]*doc-content[^"]*"[^>]*>(.*?)</[^>]+>`)},
+		{".content", regexp.MustCompile(`(?s)<[^>]*class="[^"]*\bcontent\b[^"]*"[^>]*>(.*?)</[^>]+>`)},
+		{"#content", regexp.MustCompile(`(?s)<[^>]*id="content"[^>]*>(.*?)</[^>]+>`)},
+	}
+
+	for _, p := range patterns {
+		if match := p.regex.FindStringSubmatch(content); len(match) > 1 {
+			Log.Debugf("找到正文区域: %s", p.name)
+			return match[1]
+		}
+	}
+
+	Log.Debugf("未找到正文区域，使用完整内容")
+	return content
+}
+
 // extractDomain 从 URL 提取域名
 func extractDomain(rawURL string) string {
 	u, err := url.Parse(rawURL)
@@ -104,10 +141,11 @@ func extractDomain(rawURL string) string {
 	return u.Host
 }
 
-// getFaviconURL 获取网站图标 URL (使用多个备用源)
+// getFaviconURL 获取网站图标 URL，主动检测可用性（带缓存）
 func getFaviconURL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
+		Log.Debugf("解析 URL 失败: %s, error: %v", rawURL, err)
 		return ""
 	}
 
@@ -117,9 +155,101 @@ func getFaviconURL(rawURL string) string {
 		scheme = "https"
 	}
 
-	// 使用 Google favicon 服务，请求更大尺寸以保证清晰度
-	// sz=256 可以获取更高清的图标
-	return fmt.Sprintf("https://www.google.com/s2/favicons?domain=%s&sz=256", domain)
+	// 检查缓存
+	faviconCacheMu.RLock()
+	if cached, ok := faviconCache[domain]; ok {
+		faviconCacheMu.RUnlock()
+		Log.Debugf("使用缓存图标: %s -> %s", domain, cached)
+		return cached
+	}
+	faviconCacheMu.RUnlock()
+
+	// 准备多个可能的图标源
+	sources := []string{
+		fmt.Sprintf("https://www.google.com/s2/favicons?domain=%s&sz=256", domain),
+		fmt.Sprintf("%s://%s/favicon.ico", scheme, domain),
+	}
+
+	Log.Debugf("开始检测图标可用性: %s", rawURL)
+
+	// 并行检测所有源，返回第一个可用的
+	resultChan := make(chan string, len(sources))
+
+	for _, src := range sources {
+		go func(iconURL string) {
+			if checkFaviconAvailable(iconURL) {
+				Log.Debugf("图标可用: %s", iconURL)
+				resultChan <- iconURL
+			} else {
+				Log.Debugf("图标不可用: %s", iconURL)
+				resultChan <- ""
+			}
+		}(src)
+	}
+
+	// 等待所有检测完成，返回第一个可用的
+	var result string
+	for i := 0; i < len(sources); i++ {
+		if r := <-resultChan; r != "" && result == "" {
+			result = r
+		}
+	}
+
+	// 缓存结果（无论成功还是失败）
+	faviconCacheMu.Lock()
+	faviconCache[domain] = result
+	faviconCacheMu.Unlock()
+
+	if result != "" {
+		Log.Debugf("使用图标: %s", result)
+	} else {
+		Log.Debugf("所有图标源都不可用，将使用默认图标: %s", rawURL)
+	}
+
+	return result
+}
+
+// 图标检测缓存（域名 -> 图标 URL）
+var faviconCache = make(map[string]string)
+var faviconCacheMu sync.RWMutex
+
+// checkFaviconAvailable 检测图标 URL 是否可访问
+func checkFaviconAvailable(iconURL string) bool {
+	// 创建带超时的 HTTP 客户端（300ms 超时）
+	client := &http.Client{
+		Timeout: 300 * time.Millisecond,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// 允许重定向
+			return nil
+		},
+	}
+
+	// 使用 HEAD 请求，只检查可用性，不下载内容
+	req, err := http.NewRequest("HEAD", iconURL, nil)
+	if err != nil {
+		return false
+	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	// 检查状态码是否为 2xx
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		// 额外检查 Content-Type 是否为图片
+		contentType := resp.Header.Get("Content-Type")
+		if contentType != "" && (
+			strings.HasPrefix(contentType, "image/") ||
+			contentType == "application/octet-stream") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // parseMarkdownLinks 解析 Markdown 格式的链接
@@ -202,23 +332,4 @@ func parseHTMLLinks(content string) []CardItem {
 	}
 
 	return cards
-}
-
-// 保留旧接口以兼容
-func parseKMContent(content string) ([]CardItem, string) {
-	title := extractTitle(content)
-	cards := parseMarkdownLinks(content)
-	return cards, title
-}
-
-func parseFeishuContent(content string) ([]CardItem, string) {
-	return parseKMContent(content)
-}
-
-func parseYuqueContent(content string) ([]CardItem, string) {
-	return parseKMContent(content)
-}
-
-func parseGenericContent(content string) ([]CardItem, string) {
-	return parseKMContent(content)
 }

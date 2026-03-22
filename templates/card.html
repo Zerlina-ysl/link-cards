@@ -32,13 +32,12 @@
 
             <main class="cards-grid">
                 {{range .Cards}}
-                <a href="{{.URL}}" target="_blank" class="link-card" data-url="{{.URL}}">
+                <a href="{{.URL}}" target="_blank" class="link-card" data-url="{{.URL}}" data-title="{{.Title}}">
                     <div class="link-icon">
-                        <img src="{{.Favicon}}"
+                        <img data-favicon="{{.Favicon}}"
                              alt="{{.Title}}"
                              loading="eager"
-                             decoding="async"
-                             onerror="handleImageError(this, '{{.URL}}')" />
+                             decoding="async" />
                     </div>
                     <div class="link-title">{{.Title}}</div>
                 </a>
@@ -57,47 +56,62 @@
                     dnsPreconnect.rel = 'dns-prefetch';
                     dnsPreconnect.href = 'https://www.google.com';
                     document.head.appendChild(dnsPreconnect);
+
+                    // 从 data-favicon 属性设置图标 URL（避免 HTML 转义问题）
+                    document.querySelectorAll('.link-icon img').forEach(img => {
+                        const faviconUrl = img.getAttribute('data-favicon');
+                        const card = img.closest('.link-card');
+                        const targetUrl = card ? card.dataset.url : '';
+                        const title = card ? card.dataset.title : '';
+
+                        if (targetUrl) {
+                            // 如果后端已经检测到图标不可用（返回空字符串），直接显示生成图标
+                            if (!faviconUrl || faviconUrl.trim() === '') {
+                                const defaultIcon = generateDefaultIcon(targetUrl, title);
+                                if (defaultIcon) {
+                                    img.src = defaultIcon;
+                                }
+                            } else {
+                                // 后端检测通过的图标，直接使用
+                                const decodedUrl = faviconUrl.replace(/&amp;/g, '&');
+                                img.src = decodedUrl;
+
+                                // 添加错误处理，以防后端检测不准确
+                                img.onerror = function() {
+                                    const defaultIcon = generateDefaultIcon(targetUrl, title);
+                                    if (defaultIcon) {
+                                        img.src = defaultIcon;
+                                        img.onerror = null;
+                                    }
+                                };
+                            }
+                        }
+                    });
                 })();
 
-                // 图标加载失败时的处理
-                function handleImageError(img, url) {
-                    const retryCount = parseInt(img.dataset.retryCount || '0');
 
-                    try {
-                        const urlObj = new URL(url);
-                        const protocol = urlObj.protocol;
-                        const domain = urlObj.hostname;
-
-                        // 尝试多种图标源
-                        if (retryCount === 0) {
-                            // 第一次重试: 尝试网站根目录的 favicon.ico
-                            img.dataset.retryCount = '1';
-                            img.src = `${protocol}//${domain}/favicon.ico`;
-                        } else if (retryCount === 1) {
-                            // 第二次重试: 尝试 DuckDuckGo 的 favicon 服务
-                            img.dataset.retryCount = '2';
-                            img.src = `https://icons.duckduckgo.com/ip3/${domain}.ico`;
-                        } else if (retryCount === 2) {
-                            // 第三次重试: 尝试 Favicon Kit
-                            img.dataset.retryCount = '3';
-                            img.src = `https://api.faviconkit.com/${domain}/64`;
-                        } else {
-                            // 所有尝试都失败，显示默认图标
-                            showDefaultIcon(img, url);
-                        }
-                    } catch (e) {
-                        showDefaultIcon(img, url);
-                    }
-                }
-
-                // 显示默认图标（使用网站首字母）
-                function showDefaultIcon(img, url) {
+                // 生成默认图标（优先使用链接标题，回退到域名首字母）
+                function generateDefaultIcon(url, title) {
                     try {
                         const urlObj = new URL(url);
                         const domain = urlObj.hostname.replace('www.', '');
-                        const firstLetter = domain.charAt(0).toUpperCase();
 
-                        // 生成随机颜色（基于域名）
+                        // 优先使用标题的首字母，如果没有标题则使用域名首字母
+                        let displayText = '';
+                        if (title && title.trim()) {
+                            // 取标题前两个字符（支持中英文）
+                            const trimmedTitle = title.trim();
+                            displayText = trimmedTitle.substring(0, 2);
+                            // 只对英文字符转大写，中文保持原样
+                            if (/^[a-zA-Z]/.test(displayText)) {
+                                displayText = displayText.toUpperCase();
+                            }
+                        } else {
+                            // 回退到域名首字母
+                            displayText = domain.charAt(0).toUpperCase();
+                        }
+
+                        // 生成颜色（基于域名，保证同一域名颜色一致）
                         const colors = [
                             '#6366F1', '#8B5CF6', '#EC4899', '#EF4444',
                             '#F59E0B', '#10B981', '#3B82F6', '#06B6D4'
@@ -105,28 +119,28 @@
                         const colorIndex = domain.charCodeAt(0) % colors.length;
                         const color = colors[colorIndex];
 
-                        // 创建 SVG 图标
-                        const svg = `
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-                                <rect width="100" height="100" fill="${color}"/>
-                                <text x="50" y="50"
-                                      font-family="Arial, sans-serif"
-                                      font-size="50"
-                                      font-weight="600"
-                                      fill="white"
-                                      text-anchor="middle"
-                                      dominant-baseline="central">
-                                    ${firstLetter}
-                                </text>
-                            </svg>
-                        `;
+                        // 根据文字长度调整字体大小
+                        const fontSize = displayText.length === 1 ? 50 : 36;
 
-                        img.src = 'data:image/svg+xml;base64,' + btoa(svg);
-                        img.onerror = null;
+                        // 转义 XML 特殊字符
+                        const escapedText = displayText
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&apos;');
+
+                        // 创建 SVG 图标
+                        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="${color}"/><text x="50" y="50" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="600" fill="white" text-anchor="middle" dominant-baseline="central">${escapedText}</text></svg>`;
+
+                        // 使用 encodeURIComponent 代替 btoa，避免中文编码问题
+                        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
                     } catch (e) {
                         console.error('Failed to create default icon:', e);
+                        return '';
                     }
                 }
+
             </script>
 
             <footer class="card-footer">
